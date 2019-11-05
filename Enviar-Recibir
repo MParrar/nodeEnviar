@@ -1,0 +1,318 @@
+#include <ESP8266WiFi.h>
+#include <ArduinoJson.h>
+//#include <WiFiClient.h>
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266HTTPClient.h>
+//variable globales
+int contconexion=0;
+String url;
+int count = 0;
+
+const int pingPin =D3; //Sensores desde D1-D4 
+const int agua = D5; //Actuadores desde D5-D7
+const int ventilador = D6;
+const int luz = D7;
+
+const char *ssid="NK";
+const char *password="nico1234";
+unsigned long previusmillis=0;
+const char *host = "192.168.43.156"; //replace it with your webhost url
+
+long microsecondsToCentimeters(long microseconds) {
+  // The speed of sound is 340 m/s or 29 microseconds per centimeter.
+  // The ping travels out and back, so to find the distance of the object we
+  // take half of the distance travelled.
+  return microseconds / 29 / 2;
+}
+
+//String strhost="192.168.43.156"; Sirve solo para función enviar datos 
+//String strurl="/invernadero/invernaderoBack/public/medicion/temp"; Sirve solo para función enviar datos 
+String chipid="";
+
+String enviardatos2(String clave,String valor){
+   if(WiFi.status()== WL_CONNECTED){   //Check WiFi connection status
+
+    HTTPClient http;
+    String datos_a_enviar = "chipid=" + chipid + "&valor=" + 2;
+    //{"valor":"1", "chipid":"12"}
+   // ?json={"valor":"1", "chipid":"12"}
+    http.begin("http://192.168.43.156/invernadero/invernaderoBack/public/medicion/temp");        //Indicamos el destino
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Preparamos el header text/plain si solo vamos a enviar texto plano sin un paradigma llave:valor.
+Serial.println(datos_a_enviar);
+Serial.println("-------");
+
+    int codigo_respuesta = http.POST(datos_a_enviar);   //Enviamos el post pasándole, los datos que queremos enviar. (esta función nos devuelve un código que guardamos en un int)
+
+    if(codigo_respuesta>0){
+      Serial.println("Código HTTP ► " + String(codigo_respuesta));   //Print return code
+
+      if(codigo_respuesta == 200){
+        String cuerpo_respuesta = http.getString();
+        Serial.println(http.getString());
+        Serial.println("El servidor respondió ▼ ");
+        Serial.println(cuerpo_respuesta);
+
+      }
+
+    }else{
+
+     Serial.print("Error enviando POST, código: ");
+     Serial.println(codigo_respuesta);
+
+    }
+
+    http.end();  //libero recursos
+
+  }else{
+
+     Serial.println("Error en la conexión WIFI");
+
+  }
+return "final";
+  }
+  String enviardatos3(String clave,String valor){
+    if(WiFi.status()== WL_CONNECTED){   //Check WiFi connection status
+
+    HTTPClient http;
+    String datos_a_enviar = "chipid=" + chipid + "&valor=" + valor;
+    //{"valor":"1", "chipid":"12"}
+    // ?json={"valor":"1", "chipid":"12"}
+    http.begin("http://192.168.43.156/invernadero/invernaderoBack/public/medicion/hum");        //Indicamos el destino
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Preparamos el header text/plain si solo vamos a enviar texto plano sin un paradigma llave:valor.
+    Serial.println(datos_a_enviar);
+    Serial.println("-------");
+
+    int codigo_respuesta = http.POST(datos_a_enviar);   //Enviamos el post pasándole, los datos que queremos enviar. (esta función nos devuelve un código que guardamos en un int)
+
+    if(codigo_respuesta>0){
+      Serial.println("Código HTTP ► " + String(codigo_respuesta));   //Print return code
+
+      if(codigo_respuesta == 200){
+        String cuerpo_respuesta = http.getString();
+        Serial.println(http.getString());
+        Serial.println("El servidor respondió ▼ ");
+        Serial.println(cuerpo_respuesta);
+
+      }
+
+    }else{
+
+     Serial.print("Error enviando POST, código: ");
+     Serial.println(codigo_respuesta);
+
+    }
+
+    http.end();  //libero recursos
+
+  }else{
+
+     Serial.println("Error en la conexión WIFI");
+
+  }
+  return "final";
+}
+  /*
+String enviardatos(String datos){
+  String linea="mensaje de error";
+  WiFiClient client;
+  strhost.toCharArray(host,49);
+  if(!client.connect(host,8000)){
+    Serial.println("fallo la conexion");
+    return linea;
+    }
+    
+  client.print(String("GET/ ")+strurl + " HTTP/1.1"+ "\r\n"+
+                "Host: "+strhost+"\r\n"+
+                "Accept: /"+"\r\n"+
+                "Content-Length: " +datos.length()+"\r\n"+
+                "Content-Type: application/json"+"\r\n"+
+             //   "X-Requested-With: XMLHttpRequest"+
+                "\r\n"+datos);
+                delay(10);
+
+                Serial.print("enviando datos a sql (/form por post)....");
+                unsigned long timeout=millis();
+                while(client.available()==0){
+                  if(millis()-timeout>5000){
+                   Serial.println("cliente inalcanzable por tiempo");
+                   client.stop();
+                   return linea;
+                    }
+                    
+                  }
+                  //lee todas las lineas que recibe del servicio y las imprime por la terminal serial
+  while(client.available()){
+    linea=client.readStringUntil('\r');
+    }
+    Serial.println(linea);
+    return linea;
+  }
+  */
+void setup() {
+  // Inicia Serial
+  Serial.begin(115200);
+  pinMode(agua, OUTPUT);
+  pinMode(ventilador, OUTPUT);
+  pinMode(luz, OUTPUT);
+  pinMode(pingPin, OUTPUT);
+  digitalWrite(agua, 0);
+  digitalWrite(ventilador, 0);
+  digitalWrite(luz, 0);
+  
+  Serial.println("");
+  Serial.print("chipId: "); 
+  chipid = String(ESP.getChipId());
+  Serial.println(chipid); 
+
+  // Conexión WIFI
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { //Cuenta hasta 50 si no se puede conectar lo cancela
+    delay(500);
+    Serial.print(".");
+  }
+
+    //para usar con ip fija
+    // IPAddress ip(192,168,1,156); 
+    // IPAddress gateway(192,168,1,1); 
+    // IPAddress subnet(255,255,255,0); 
+    //  WiFi.config(ip, gateway, subnet); 
+      
+    Serial.println("");
+    Serial.println("WiFi conectado");
+    Serial.println(WiFi.localIP());
+    Serial.print("Netmask: ");
+    Serial.println(WiFi.subnetMask());
+    Serial.print("Gateway: ");
+    Serial.println(WiFi.gatewayIP());
+  
+}
+
+void loop() {
+    unsigned long currentMillis = millis();
+
+  if (currentMillis - previusmillis >= 20000) { //envia la temperatura cada 20 segundos
+    previusmillis = currentMillis;
+    long duration, inches, cm;
+      
+    int hum = 10;
+    if(cm==0){
+      cm=2;
+      Serial.print("valor 2");
+    }
+    enviardatos2("distancia",String(cm));
+    delayMicroseconds(100);
+    enviardatos3("hola",String(hum));
+  
+  }
+  // lectura BDD
+  WiFiClient client;
+  const int httpPort = 80;
+  if (!client.connect(host, httpPort)) {
+    Serial.println("connection failed");
+    return;
+  }
+
+  if (count == 0){
+    url = "/invernadero/invernaderoBack/public/actuadorB/2";
+    count = count + 1;
+    Serial.println("lectura agua");
+  }
+  else if (count == 1){
+    url = "/invernadero/invernaderoBack/public/actuadorB/3";
+    count = count + 1;
+    Serial.println("lectura ventilador ");
+  }
+  else if (count == 2){
+    url = "/invernadero/invernaderoBack/public/actuadorB/4";
+    count = count + 1;
+    Serial.println("lectura luz");
+  }
+  Serial.print("Requesting URL: ");
+  Serial.println(url);
+  
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");
+  delay(500);
+  String section="header";
+  while(client.available()){
+    String line = client.readStringUntil('\r');
+    //Serial.print(line);
+    // we’ll parse the HTML body here
+    if (section=="header") { // headers..
+     
+      if (line=="\n") { // skips the empty space at the beginning 
+        section="json";
+      }
+    }
+    else if (section=="json") {  // print the good stuff
+      section="ignore";
+      String result = line.substring(1);
+      Serial.print("result =");
+      Serial.println(result);
+      // Parse JSON
+      int size = result.length() + 1;
+      Serial.print("size =");
+      Serial.println(String(size));
+      
+      char json[size];
+      Serial.print("json char =");
+      Serial.println(String(json));
+      
+      //char jso[size]="{\"id\":\"1\",\"status\":\"off\"}";
+      result.toCharArray(json, size);
+      Serial.print("result final =");
+      Serial.println(result);
+      Serial.println("");
+      
+      StaticJsonDocument<200> doc;
+      DeserializationError error= deserializeJson(doc,result);
+      if (error)
+      {
+        Serial.println("deserializeJson() fallo el codigo");
+        Serial.print(error.c_str());
+        return;
+      }
+      String led = doc["estado"];
+      Serial.println ("variable led ="+led);
+      if(count == 1){
+        if(led == "on"){
+          digitalWrite(agua, 1);
+          delay(100);
+          Serial.println("D1 is On..!");
+        }
+        else if(led == "off"){
+          digitalWrite(agua, 0);
+          delay(100);
+          Serial.println("D1 is Off..!");
+        }
+      }
+      else if(count == 2){
+        if(led == "on"){
+          digitalWrite(ventilador, 1);
+          Serial.println("D2 is On..!");
+        }
+        else if(led == "off"){
+          digitalWrite(ventilador, 0);
+          Serial.println("D2 is Off..!");
+        }
+      }
+      else if(count == 3){
+        if(led == "on"){
+          digitalWrite(luz, 1);
+          Serial.println("D3 is On..!");
+        }
+        else if(led == "off"){
+          digitalWrite(luz, 0);
+          Serial.println("D3 is Off..!");
+        }
+        count = 0;
+      }
+      if (count == 3)
+        count = 0;
+      }
+  }
+  Serial.println();
+  Serial.println("closing connection");
+  delayMicroseconds(1000);
+}
