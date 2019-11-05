@@ -1,0 +1,173 @@
+//#include <ESP8266WiFi.h>
+//#include <WiFiClient.h>
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266HTTPClient.h>
+//variable globales
+int contconexion=0;
+const int pingPin =D3;
+const char *ssid="NK";
+const char *password="nico1234";
+unsigned long previusmillis=0;
+
+long microsecondsToCentimeters(long microseconds) {
+  // The speed of sound is 340 m/s or 29 microseconds per centimeter.
+  // The ping travels out and back, so to find the distance of the object we
+  // take half of the distance travelled.
+  return microseconds / 29 / 2;
+}
+char host[48];
+String strhost="192.168.43.50:8080";
+String strurl="/invernadero/invernaderoBack/public/medicion";
+String chipid="";
+String enviardatos2(String clave,String valor){
+   if(WiFi.status()== WL_CONNECTED){   //Check WiFi connection status
+
+    HTTPClient http;
+    String datos_a_enviar = "chipid=" + chipid + "&valor=" + 2;
+    //{"valor":"1", "chipid":"12"}
+   // ?json={"valor":"1", "chipid":"12"}
+    http.begin("http://192.168.43.50:8080/invernadero/invernaderoBack/public/medicion");        //Indicamos el destino
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Preparamos el header text/plain si solo vamos a enviar texto plano sin un paradigma llave:valor.
+Serial.println(datos_a_enviar);
+Serial.println("-------");
+
+    int codigo_respuesta = http.POST(datos_a_enviar);   //Enviamos el post pasándole, los datos que queremos enviar. (esta función nos devuelve un código que guardamos en un int)
+
+    if(codigo_respuesta>0){
+      Serial.println("Código HTTP ► " + String(codigo_respuesta));   //Print return code
+
+      if(codigo_respuesta == 200){
+        String cuerpo_respuesta = http.getString();
+        Serial.println(http.getString());
+        Serial.println("El servidor respondió ▼ ");
+        Serial.println(cuerpo_respuesta);
+
+      }
+
+    }else{
+
+     Serial.print("Error enviando POST, código: ");
+     Serial.println(codigo_respuesta);
+
+    }
+
+    http.end();  //libero recursos
+
+  }else{
+
+     Serial.println("Error en la conexión WIFI");
+
+  }
+return "final";
+  }
+String enviardatos(String datos){
+  String linea="mensaje de error";
+  WiFiClient client;
+  strhost.toCharArray(host,49);
+  if(!client.connect(host,8000)){
+    Serial.println("fallo la conexion");
+    return linea;
+    }
+    
+  client.print(String("GET/ ")+strurl + " HTTP/1.1"+ "\r\n"+
+                "Host: "+strhost+"\r\n"+
+                "Accept: /"+"\r\n"+
+                "Content-Length: " +datos.length()+"\r\n"+
+                "Content-Type: application/json"+"\r\n"+
+             //   "X-Requested-With: XMLHttpRequest"+
+                "\r\n"+datos);
+                delay(10);
+
+                Serial.print("enviando datos a sql (/form por post)....");
+                unsigned long timeout=millis();
+                while(client.available()==0){
+                  if(millis()-timeout>5000){
+                   Serial.println("cliente inalcanzable por tiempo");
+                   client.stop();
+                   return linea;
+                    }
+                    
+                  }
+                  //lee todas las lineas que recibe del servicio y las imprime por la terminal serial
+  while(client.available()){
+    linea=client.readStringUntil('\r');
+    }
+    Serial.println(linea);
+    return linea;
+  }
+void setup() {
+// Inicia Serial
+  Serial.begin(115200);
+  Serial.println("");
+  pinMode(pingPin, OUTPUT);
+  Serial.print("chipId: "); 
+  chipid = String(ESP.getChipId());
+  Serial.println(chipid); 
+
+  // Conexión WIFI
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED and contconexion <50) { //Cuenta hasta 50 si no se puede conectar lo cancela
+    ++contconexion;
+    delay(500);
+    Serial.print(".");
+  }
+  if (contconexion <50) {
+      //para usar con ip fija
+     // IPAddress ip(192,168,1,156); 
+     // IPAddress gateway(192,168,1,1); 
+     // IPAddress subnet(255,255,255,0); 
+    //  WiFi.config(ip, gateway, subnet); 
+      
+      Serial.println("");
+      Serial.println("WiFi conectado");
+      Serial.println(WiFi.localIP());
+  }
+  else { 
+      Serial.println("");
+      Serial.println("Error de conexion");
+  }
+}
+
+void loop() {
+    unsigned long currentMillis = millis();
+
+  if (currentMillis - previusmillis >= 10000) { //envia la temperatura cada 1 segundos
+    previusmillis = currentMillis;
+  long duration, inches, cm;
+
+  // The PING))) is triggered by a HIGH pulse of 2 or more microseconds.
+  // Give a short LOW pulse beforehand to ensure a clean HIGH pulse:
+
+  digitalWrite(pingPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(pingPin, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(pingPin, LOW);
+
+  // The same pin is used to read the signal from the PING))): a HIGH pulse
+  // whose duration is the time (in microseconds) from the sending of the ping
+  // to the reception of its echo off of an object.
+  pinMode(pingPin, INPUT);
+  duration = pulseIn(pingPin, HIGH);
+
+  // convert the time into a distance
+
+
+  
+  cm = microsecondsToCentimeters(duration);
+
+  Serial.print(inches);
+  Serial.print("in, ");
+  Serial.print(cm);
+  Serial.print("cm");
+  Serial.println();
+if(cm==0){
+  cm=2;
+  Serial.print("valor 2");
+  }
+  enviardatos2("distancia",cm+"");
+  }
+
+
+
+}
